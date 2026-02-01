@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   LayoutDashboard, 
@@ -21,8 +20,8 @@ export const POSITIONS = ['Goleiro', 'Zagueiro', 'Meio-Campo', 'Atacante'] as co
 export const UNIFORM_SIZES = ['PP', 'P', 'M', 'G', 'GG'] as const;
 export const MONTHLY_FEE = 28.00;
 
-// Logo Padrão (Fallback)
-export const DEFAULT_LOGO = "desintro.png"; 
+// Logo Padrão (Referência absoluta para a pasta public)
+export const DEFAULT_LOGO = "/desintro.png"; 
 
 export const ICONS = {
   Dashboard: <LayoutDashboard size={20} />,
