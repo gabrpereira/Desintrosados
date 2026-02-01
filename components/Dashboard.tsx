@@ -73,9 +73,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
-          <div className="w-14 h-14 flex items-center justify-center hidden sm:block">
-            <img src={logo} alt="Escudo" className="w-full h-full object-contain" />
-          </div>
           <div>
             <h2 className="text-2xl md:text-3xl font-bold font-heading text-dark dark:text-white uppercase tracking-tight">Dashboard</h2>
             <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Temporada 2026 • DESINTROSADOS FC</p>
