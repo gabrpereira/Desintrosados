@@ -1,23 +1,38 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Player, Match, ViewType } from './types';
 import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import PlayerList from './components/PlayerList';
-import Finances from './components/Finances';
-import PlayerModal from './components/PlayerModal';
-import StatsView from './components/StatsView';
-import DeleteModal from './components/DeleteModal';
-import DeleteMatchModal from './components/DeleteMatchModal';
-import PlayerDetailsModal from './components/PlayerDetailsModal';
-import MatchList from './components/MatchList';
-import MatchModal from './components/MatchModal';
-import MatchDetailsModal from './components/MatchDetailsModal';
-import UserProfile from './components/UserProfile';
-import LogoutModal from './components/LogoutModal';
-import Auth from './components/Auth';
 import { supabase } from './services/supabase';
 import { DEFAULT_LOGO } from './constants';
+
+// Carregamento Tardio (Lazy Loading) de Componentes de Visualização
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const PlayerList = lazy(() => import('./components/PlayerList'));
+const Finances = lazy(() => import('./components/Finances'));
+const StatsView = lazy(() => import('./components/StatsView'));
+const MatchList = lazy(() => import('./components/MatchList'));
+const UserProfile = lazy(() => import('./components/UserProfile'));
+const Auth = lazy(() => import('./components/Auth'));
+
+// Carregamento Tardio de Modais
+const PlayerModal = lazy(() => import('./components/PlayerModal'));
+const MatchModal = lazy(() => import('./components/MatchModal'));
+const PlayerDetailsModal = lazy(() => import('./components/PlayerDetailsModal'));
+const MatchDetailsModal = lazy(() => import('./components/MatchDetailsModal'));
+const DeleteModal = lazy(() => import('./components/DeleteModal'));
+const DeleteMatchModal = lazy(() => import('./components/DeleteMatchModal'));
+const LogoutModal = lazy(() => import('./components/LogoutModal'));
+
+// Fallback de carregamento para o Suspense
+const ViewLoader = () => (
+  <div className="flex flex-col items-center justify-center py-32 space-y-4 animate-in fade-in duration-500">
+    <div className="relative w-12 h-12">
+      <div className="absolute inset-0 border-4 border-primary/10 rounded-full"></div>
+      <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+    </div>
+    <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Preparando Vestiário...</p>
+  </div>
+);
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -364,7 +379,13 @@ const App: React.FC = () => {
     );
   }
 
-  if (!session) return <Auth logo={appLogo} />;
+  if (!session) {
+    return (
+      <Suspense fallback={<ViewLoader />}>
+        <Auth logo={appLogo} />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface-light dark:bg-surface-dark text-dark dark:text-slate-200 flex flex-col md:flex-row transition-colors duration-300">
@@ -379,7 +400,7 @@ const App: React.FC = () => {
         toggleTheme={toggleTheme}
         onLogout={() => setIsLogoutModalOpen(true)}
       />
-      {/* Ajustado padding top no mobile (pt-20) para dar espaço ao header fixo */}
+      
       <main className="flex-1 md:pl-24 pt-20 md:pt-12 pb-12 transition-all duration-300 min-h-screen p-4 md:p-12 overflow-x-hidden">
         <div className="max-w-7xl mx-auto">
           {loading ? (
@@ -388,7 +409,7 @@ const App: React.FC = () => {
                <p className="text-slate-400 font-black uppercase tracking-widest text-[10px]">Atualizando dados do clube...</p>
             </div>
           ) : (
-            <>
+            <Suspense fallback={<ViewLoader />}>
               {view === 'dashboard' && <Dashboard logo={appLogo} players={players} matches={matches} isDarkMode={isDarkMode} />}
               {view === 'players' && <PlayerList players={players} onEdit={(p) => { setEditingPlayer(p); setIsModalOpen(true); }} onView={(p) => { setViewingPlayer(p); setIsDetailsModalOpen(true); }} onDelete={(id) => { const player = players.find(p => id === p.id); if (player) { setPlayerToDelete(player); setIsDeleteModalOpen(true); } }} onAdd={() => { setEditingPlayer(undefined); setIsModalOpen(true); }} />}
               {view === 'matches' && <MatchList matches={matches} players={players} onAdd={() => { setEditingMatch(undefined); setIsMatchModalOpen(true); }} onEdit={(m) => { setEditingMatch(m); setIsMatchModalOpen(true); }} onView={(m) => { setViewingMatch(m); setIsMatchDetailsModalOpen(true); }} onDelete={(id) => { const match = matches.find(m => m.id === id); if (match) { setMatchToDelete(match); setIsDeleteMatchModalOpen(true); } }} />}
@@ -405,18 +426,20 @@ const App: React.FC = () => {
                   onLogout={() => setIsLogoutModalOpen(true)}
                 />
               )}
-            </>
+            </Suspense>
           )}
         </div>
       </main>
 
-      <PlayerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSavePlayer} initialData={editingPlayer} />
-      <MatchModal isOpen={isMatchModalOpen} onClose={() => setIsMatchModalOpen(false)} onSave={handleSaveMatch} initialData={editingMatch} players={players} />
-      <PlayerDetailsModal logo={appLogo} isOpen={isDetailsModalOpen} onClose={() => setIsDetailsModalOpen(false)} player={viewingPlayer} />
-      <MatchDetailsModal logo={appLogo} isOpen={isMatchDetailsModalOpen} onClose={() => setIsMatchDetailsModalOpen(false)} match={viewingMatch} players={players} />
-      <DeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDeletePlayer} playerName={playerToDelete?.name} />
-      <DeleteMatchModal isOpen={isDeleteMatchModalOpen} onClose={() => setIsDeleteMatchModalOpen(false)} onConfirm={handleDeleteMatch} matchOpponent={matchToDelete?.opponent} />
-      <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={handleConfirmLogout} />
+      <Suspense fallback={null}>
+        <PlayerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSavePlayer} initialData={editingPlayer} />
+        <MatchModal isOpen={isMatchModalOpen} onClose={() => setIsMatchModalOpen(false)} onSave={handleSaveMatch} initialData={editingMatch} players={players} />
+        <PlayerDetailsModal logo={appLogo} isOpen={isDetailsModalOpen} onClose={() => setIsDetailsModalOpen(false)} player={viewingPlayer} />
+        <MatchDetailsModal logo={appLogo} isOpen={isMatchDetailsModalOpen} onClose={() => setIsMatchDetailsModalOpen(false)} match={viewingMatch} players={players} />
+        <DeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDeletePlayer} playerName={playerToDelete?.name} />
+        <DeleteMatchModal isOpen={isDeleteMatchModalOpen} onClose={() => setIsDeleteMatchModalOpen(false)} onConfirm={handleDeleteMatch} matchOpponent={matchToDelete?.opponent} />
+        <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={handleConfirmLogout} />
+      </Suspense>
     </div>
   );
 };
