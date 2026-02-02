@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar';
 import { supabase } from './services/supabase';
 import { DEFAULT_LOGO } from './constants';
 
-// Carregamento Tardio (Lazy Loading)
+// Carregamento Tardio (Lazy Loading) para performance e estabilidade
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const PlayerList = lazy(() => import('./components/PlayerList'));
 const Finances = lazy(() => import('./components/Finances'));
@@ -41,8 +41,8 @@ const App: React.FC = () => {
   
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') === 'dark' || 
-        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      const saved = localStorage.getItem('theme');
+      return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
     }
     return true;
   });
@@ -66,7 +66,7 @@ const App: React.FC = () => {
     try {
       const { data } = await supabase.from('app_config').select('logo_data').eq('id', 1).maybeSingle();
       if (data?.logo_data) setAppLogo(data.logo_data);
-    } catch (e) { console.warn("Erro ao buscar logo:", e); }
+    } catch (e) { console.warn("Erro ao buscar logo customizada:", e); }
   }, []);
 
   const fetchUserProfile = useCallback(async (userId: string) => {
@@ -76,52 +76,32 @@ const App: React.FC = () => {
     } catch (e) { console.error("Erro ao carregar perfil:", e); }
   }, []);
 
-  const mapPlayerFromDb = (dbPlayer: any): Player => {
-    const currentYearMonth = new Date().toISOString().slice(0, 7);
-    const history = dbPlayer.payment_history || [];
-    return {
-      id: dbPlayer.id,
-      name: dbPlayer.name,
-      goals: dbPlayer.goals || 0,
-      games: dbPlayer.games || 0,
-      monthlyFeePaid: history.includes(currentYearMonth),
-      position: dbPlayer.position,
-      shirtNumber: dbPlayer.shirt_number || 0,
-      uniformSize: dbPlayer.uniform_size || 'M',
-      isGuest: dbPlayer.is_guest || false,
-      addedAt: dbPlayer.added_at,
-      paymentHistory: history,
-      updatedBy: dbPlayer.updated_by
-    };
-  };
-
-  const mapMatchFromDb = (dbMatch: any): Match => ({
-    id: dbMatch.id,
-    opponent: dbMatch.opponent,
-    date: dbMatch.date,
-    location: dbMatch.location,
-    ourScore: dbMatch.our_score || 0,
-    opponentScore: dbMatch.opponent_score || 0,
-    status: dbMatch.status,
-    scorers: dbMatch.scorers || {},
-    attendance: dbMatch.attendance || [],
-    updatedBy: dbMatch.updated_by
-  });
-
   const fetchData = useCallback(async (currentSession: any) => {
     if (!currentSession) return;
     setLoading(true);
     try {
-      const [{ data: pData, error: pError }, { data: mData, error: mError }] = await Promise.all([
+      const [pRes, mRes] = await Promise.all([
         supabase.from('players').select('*').order('name', { ascending: true }),
         supabase.from('matches').select('*').order('date', { ascending: false })
       ]);
 
-      console.log('Dados Jogadores:', pData, 'Erro:', pError);
-      console.log('Dados Partidas:', mData, 'Erro:', mError);
+      console.log('Sync Dados - Jogadores:', pRes.data, 'Partidas:', mRes.data);
 
-      setPlayers((pData || []).map(mapPlayerFromDb));
-      setMatches((mData || []).map(mapMatchFromDb));
+      if (pRes.data) {
+        setPlayers(pRes.data.map((p: any) => ({
+          ...p,
+          id: p.id,
+          monthlyFeePaid: (p.payment_history || []).includes(new Date().toISOString().slice(0, 7)),
+          paymentHistory: p.payment_history || []
+        })));
+      }
+      if (mRes.data) {
+        setMatches(mRes.data.map((m: any) => ({
+          ...m,
+          ourScore: m.our_score || 0,
+          opponentScore: m.opponent_score || 0
+        })));
+      }
     } catch (e) {
       console.error("Erro fatal ao carregar dados:", e);
     } finally {
@@ -129,20 +109,34 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Timer de segurança (Failsafe) para destravar a tela inicial
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isInitializing) {
+        console.warn("Failsafe disparado: Destravando tela inicial após 5s de inatividade do Supabase.");
+        setIsInitializing(false);
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [isInitializing]);
+
   useEffect(() => {
     let isMounted = true;
+    
     const initApp = async () => {
       try {
         await fetchAppConfig();
         const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
         if (!isMounted) return;
+        
         setSession(initialSession);
         if (initialSession?.user) {
           await fetchUserProfile(initialSession.user.id);
           await fetchData(initialSession);
         }
       } catch (err) {
-        console.error("Erro na inicialização:", err);
+        console.error("Erro na inicialização do App:", err);
       } finally {
         if (isMounted) setIsInitializing(false);
       }
@@ -152,6 +146,7 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return;
+      
       setSession(newSession);
       if (newSession?.user) {
         await fetchUserProfile(newSession.user.id);
@@ -159,6 +154,8 @@ const App: React.FC = () => {
           await fetchData(newSession);
         }
       }
+      // Garante que o estado de inicialização saia de true em qualquer mudança de estado auth
+      setIsInitializing(false);
     });
 
     return () => { subscription.unsubscribe(); isMounted = false; };
@@ -174,9 +171,12 @@ const App: React.FC = () => {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-dark flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-dark flex flex-col items-center justify-center p-8">
         <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-primary font-black uppercase tracking-[0.4em] text-[10px]">Autenticando...</p>
+        <div className="mt-8 text-center space-y-2 animate-pulse">
+          <p className="text-primary font-black uppercase tracking-[0.4em] text-[10px]">Autenticando...</p>
+          <p className="text-slate-600 font-bold uppercase tracking-widest text-[8px]">DESINTROSADOS FC</p>
+        </div>
       </div>
     );
   }
@@ -184,7 +184,7 @@ const App: React.FC = () => {
   if (!session) return <Suspense fallback={<ViewLoader />}><Auth logo={appLogo} /></Suspense>;
 
   return (
-    <div className="min-h-screen bg-surface-light dark:bg-surface-dark flex flex-col md:flex-row">
+    <div className="min-h-screen bg-surface-light dark:bg-surface-dark flex flex-col md:flex-row transition-colors duration-300">
       <Sidebar 
         logo={appLogo}
         user={session.user} 
@@ -197,7 +197,7 @@ const App: React.FC = () => {
         onLogout={() => setIsLogoutModalOpen(true)}
       />
       
-      <main className="flex-1 md:pl-24 pt-20 md:pt-12 p-4 md:p-12">
+      <main className="flex-1 md:pl-24 pt-20 md:pt-12 p-4 md:p-12 overflow-x-hidden">
         <div className="max-w-7xl mx-auto">
           {loading ? <ViewLoader /> : (
             <Suspense fallback={<ViewLoader />}>
