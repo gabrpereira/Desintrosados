@@ -1,7 +1,7 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ViewType } from '../types';
-import { ICONS } from '../constants';
+import { ICONS, DEFAULT_LOGO } from '../constants';
+import { supabase } from '../services/supabase';
 import { Sun, Moon, LogOut, User, ChevronRight, Menu, X } from 'lucide-react';
 
 interface SidebarProps {
@@ -16,8 +16,24 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ user, userName, userAvatar, logo, currentView, setView, isDarkMode, toggleTheme, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({ user, userName, userAvatar, logo: initialLogo, currentView, setView, isDarkMode, toggleTheme, onLogout }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [appLogo, setAppLogo] = useState(initialLogo || DEFAULT_LOGO);
+  const [logoLoading, setLogoLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const { data } = await supabase.from('app_config').select('logo_data').eq('id', 1).maybeSingle();
+        if (data?.logo_data) setAppLogo(data.logo_data);
+      } catch (e) {
+        console.warn("Falha ao carregar logo na Sidebar");
+      } finally {
+        setLogoLoading(false);
+      }
+    };
+    fetchLogo();
+  }, []);
 
   const menuItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: ICONS.Dashboard },
@@ -36,18 +52,21 @@ const Sidebar: React.FC<SidebarProps> = ({ user, userName, userAvatar, logo, cur
 
   return (
     <>
-      {/* --- DESKTOP SIDEBAR (UNCHANGED) --- */}
       <aside 
         className="hidden md:flex fixed left-0 top-4 bottom-4 bg-dark text-white z-[100] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] w-20 hover:w-80 rounded-r-[40px] border-y border-r border-white/5 dark:border-primary/10 group shadow-[10px_0_50px_rgba(0,0,0,0.5)] overflow-hidden flex-col py-8"
       >
         <div className="px-3 mb-10 flex items-center h-14 overflow-hidden shrink-0">
           <div className="w-14 min-w-[56px] flex items-center justify-center shrink-0 cursor-pointer" onClick={() => setView('dashboard')}>
             <div className="w-14 h-14 flex items-center justify-center transition-all duration-500 hover:scale-110">
-              <img 
-                src={logo} 
-                alt="Desintrosados FC" 
-                className="w-full h-full object-contain rotate-3 group-hover:rotate-0 transition-transform duration-500" 
-              />
+              {logoLoading ? (
+                <div className="w-10 h-10 bg-white/5 rounded-xl animate-pulse"></div>
+              ) : (
+                <img 
+                  src={appLogo} 
+                  alt="Desintrosados FC" 
+                  className="w-full h-full object-contain rotate-3 group-hover:rotate-0 transition-transform duration-500" 
+                />
+              )}
             </div>
           </div>
           <div className="overflow-hidden opacity-0 group-hover:opacity-100 transition-all duration-500 whitespace-nowrap">
@@ -138,7 +157,6 @@ const Sidebar: React.FC<SidebarProps> = ({ user, userName, userAvatar, logo, cur
         </div>
       </aside>
 
-      {/* --- MOBILE HEADER & DROPDOWN --- */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-dark/95 backdrop-blur-xl border-b border-white/5 z-[150] flex items-center justify-between px-6 shadow-2xl">
         <button 
           onClick={() => setIsMobileMenuOpen(true)}
@@ -151,26 +169,32 @@ const Sidebar: React.FC<SidebarProps> = ({ user, userName, userAvatar, logo, cur
           <h2 className="text-sm font-black font-heading tracking-tight text-white uppercase">
             DESINTROSADOS <span className="text-primary">FC</span>
           </h2>
-          <img src={logo} alt="Logo" className="w-8 h-8 object-contain" />
+          <div className="w-8 h-8 flex items-center justify-center">
+            {logoLoading ? (
+              <div className="w-6 h-6 bg-white/5 rounded-lg animate-pulse"></div>
+            ) : (
+              <img src={appLogo} alt="Logo" className="w-full h-full object-contain" />
+            )}
+          </div>
         </div>
 
-        <div className="w-8"></div> {/* Spacer for visual balance */}
+        <div className="w-8"></div>
       </div>
 
-      {/* MOBILE OVERLAY MENU (DRAWER) */}
       {isMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-[200] animate-in fade-in duration-300">
-          {/* Backdrop */}
           <div 
             className="absolute inset-0 bg-black/80 backdrop-blur-md"
             onClick={() => setIsMobileMenuOpen(false)}
           />
-          
-          {/* Drawer Content */}
           <div className="absolute top-0 left-0 bottom-0 w-[280px] bg-[#020d0c] border-r border-white/5 flex flex-col p-6 animate-in slide-in-from-left duration-300">
             <div className="flex items-center justify-between mb-10">
               <div className="w-10 h-10">
-                <img src={logo} alt="Logo" className="w-full h-full object-contain" />
+                {logoLoading ? (
+                  <div className="w-8 h-8 bg-white/5 rounded-xl animate-pulse"></div>
+                ) : (
+                  <img src={appLogo} alt="Logo" className="w-full h-full object-contain" />
+                )}
               </div>
               <button 
                 onClick={() => setIsMobileMenuOpen(false)}

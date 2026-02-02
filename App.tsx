@@ -85,8 +85,6 @@ const App: React.FC = () => {
         supabase.from('matches').select('*').order('date', { ascending: false })
       ]);
 
-      console.log('Sync Dados - Jogadores:', pRes.data, 'Partidas:', mRes.data);
-
       if (pRes.data) {
         setPlayers(pRes.data.map((p: any) => ({
           ...p,
@@ -109,11 +107,27 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Timer de segurança (Failsafe) para destravar a tela inicial
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      // Limpeza manual imediata para garantir redirecionamento sem depender apenas do listener
+      setSession(null);
+      setUserName("");
+      setPlayers([]);
+      setMatches([]);
+      setView('dashboard');
+      setIsLogoutModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao encerrar sessão:", error);
+      // Mesmo com erro, forçamos a limpeza local
+      setSession(null);
+      setIsLogoutModalOpen(false);
+    }
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (isInitializing) {
-        console.warn("Failsafe disparado: Destravando tela inicial após 5s de inatividade do Supabase.");
         setIsInitializing(false);
       }
     }, 5000);
@@ -127,16 +141,14 @@ const App: React.FC = () => {
       try {
         await fetchAppConfig();
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
         if (!isMounted) return;
-        
         setSession(initialSession);
         if (initialSession?.user) {
           await fetchUserProfile(initialSession.user.id);
           await fetchData(initialSession);
         }
       } catch (err) {
-        console.error("Erro na inicialização do App:", err);
+        console.error("Erro na inicialização:", err);
       } finally {
         if (isMounted) setIsInitializing(false);
       }
@@ -146,15 +158,18 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return;
-      
       setSession(newSession);
       if (newSession?.user) {
         await fetchUserProfile(newSession.user.id);
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
           await fetchData(newSession);
         }
+      } else {
+        // Quando o evento é SIGNED_OUT, newSession é null
+        setPlayers([]);
+        setMatches([]);
+        setUserName("");
       }
-      // Garante que o estado de inicialização saia de true em qualquer mudança de estado auth
       setIsInitializing(false);
     });
 
@@ -219,7 +234,7 @@ const App: React.FC = () => {
         <MatchDetailsModal logo={appLogo} isOpen={isMatchDetailsModalOpen} onClose={() => setIsMatchDetailsModalOpen(false)} match={viewingMatch} players={players} />
         <DeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={() => {}} playerName={playerToDelete?.name} />
         <DeleteMatchModal isOpen={isDeleteMatchModalOpen} onClose={() => setIsDeleteMatchModalOpen(false)} onConfirm={() => {}} matchOpponent={matchToDelete?.opponent} />
-        <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={async () => { await supabase.auth.signOut(); setIsLogoutModalOpen(false); }} />
+        <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={handleLogout} />
       </Suspense>
     </div>
   );

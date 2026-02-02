@@ -1,7 +1,7 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Player, TeamStats, Match } from '../types';
-import { MONTHLY_FEE, ICONS } from '../constants';
+import { MONTHLY_FEE, ICONS, DEFAULT_LOGO } from '../constants';
+import { supabase } from '../services/supabase';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   Cell, PieChart, Pie 
@@ -18,12 +18,30 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ 
   players, 
   matches, 
-  logo,
+  logo: initialLogo,
   isDarkMode
 }) => {
+  const [appLogo, setAppLogo] = useState(initialLogo || DEFAULT_LOGO);
+  const [logoLoading, setLogoLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const { data } = await supabase.from('app_config').select('logo_data').eq('id', 1).maybeSingle();
+        if (data?.logo_data) setAppLogo(data.logo_data);
+      } catch (e) {
+        console.warn("Falha ao carregar logo no Dashboard");
+      } finally {
+        setLogoLoading(false);
+      }
+    };
+    fetchLogo();
+  }, []);
+
   const stats: TeamStats = useMemo(() => {
     const totalGoals = players.reduce((acc, p) => acc + p.goals, 0);
-    const totalGames = matches.filter(m => m.status === 'concluido').length;
+    const concludedMatches = matches.filter(m => m.status === 'concluido');
+    const totalGames = concludedMatches.length;
     
     const fixos = players.filter(p => !p.isGuest);
     const guests = players.filter(p => p.isGuest);
@@ -73,6 +91,13 @@ const Dashboard: React.FC<DashboardProps> = ({
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
+          <div className="w-12 h-12 flex items-center justify-center">
+            {logoLoading ? (
+              <div className="w-10 h-10 bg-slate-200 dark:bg-white/5 rounded-xl animate-pulse"></div>
+            ) : (
+              <img src={appLogo} alt="Logo" className="w-full h-full object-contain drop-shadow-md" />
+            )}
+          </div>
           <div>
             <h2 className="text-2xl md:text-3xl font-bold font-heading text-dark dark:text-white uppercase tracking-tight">Dashboard</h2>
             <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Temporada 2026 • DESINTROSADOS FC</p>

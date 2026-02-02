@@ -1,19 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { Mail, Lock, LogIn, UserPlus, Loader2, AlertCircle, Eye, EyeOff, User } from 'lucide-react';
+import { DEFAULT_LOGO } from '../constants';
 
 interface AuthProps {
   logo: string;
 }
 
-const Auth: React.FC<AuthProps> = ({ logo }) => {
+const Auth: React.FC<AuthProps> = ({ logo: initialLogo }) => {
   const [loading, setLoading] = useState(false);
+  const [logoLoading, setLogoLoading] = useState(true);
+  const [appLogo, setAppLogo] = useState(initialLogo || DEFAULT_LOGO);
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const { data } = await supabase.from('app_config').select('logo_data').eq('id', 1).maybeSingle();
+        if (data?.logo_data) setAppLogo(data.logo_data);
+      } catch (e) {
+        console.warn("Falha ao carregar logo na Auth");
+      } finally {
+        setLogoLoading(false);
+      }
+    };
+    fetchLogo();
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,8 +81,12 @@ const Auth: React.FC<AuthProps> = ({ logo }) => {
 
       <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in duration-500">
         <div className="text-center mb-10">
-          <div className="w-24 h-24 mx-auto mb-6 flex items-center justify-center rotate-3">
-            <img src={logo} alt="Logo Desintrosados FC" className="w-full h-full object-contain" />
+          <div className="w-24 h-24 mx-auto mb-6 flex items-center justify-center rotate-3 relative">
+            {logoLoading ? (
+              <div className="w-20 h-20 bg-white/5 rounded-3xl animate-pulse border border-white/10 flex items-center justify-center text-[8px] font-black text-slate-600 uppercase tracking-tighter">Escudo...</div>
+            ) : (
+              <img src={appLogo} alt="Logo Desintrosados FC" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(0,184,169,0.3)]" />
+            )}
           </div>
           <h1 className="text-4xl font-black font-heading text-white tracking-tighter uppercase">
             DESINTROSADOS <span className="text-primary">FC</span>
